@@ -295,7 +295,7 @@ else:
                 else:
                     add_submeta_for_user(username, open_meta["id"], sub_title.strip(), int(sub_points), sub_due_str)
                     st.success("Sub-meta adicionada")
-                    st.experimental_rerun()
+                    rerun
 
             st.markdown("---")
             # actions: delete meta
@@ -303,5 +303,6 @@ else:
                 delete_meta_for_user(username, open_meta["id"])
                 st.success("Meta removida")
                 st.experimental_rerun()
+
 
 
