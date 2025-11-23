@@ -1,4 +1,4 @@
-# app.py
+# app.py# app.py
 import streamlit as st
 import json
 import os
@@ -181,11 +181,11 @@ with st.sidebar:
                 if not new_user or not new_pwd:
                     st.sidebar.error("Preencha usuário e senha")
                 else:
-                    ok, msg = create_user(new_user, new_pwd), None
+                    ok, msg = create_user(new_user, new_pwd)
                     if ok:
                         st.sidebar.success("Conta criada! Faça o login.")
                     else:
-                        st.sidebar.error("Usuário já existe. Escolha outro.")
+                        st.sidebar.error(msg)
         else:
             login_user = st.text_input("Usuário", key="login_user")
             login_pwd = st.text_input("Senha", type="password", key="login_pwd")
@@ -199,7 +199,7 @@ with st.sidebar:
         st.write(f"Conectado como: **{st.session_state.user}**")
         if st.button("Sair"):
             st.session_state.user = None
-            st.experimental_rerun()
+            st.rerun()
         st.markdown("---")
         # Export / Import
         if st.button("Exportar backup (JSON)"):
@@ -228,11 +228,14 @@ st.write(f"### Usuário: {username}")
 # Add meta form
 with st.expander("➕ Adicionar nova meta", expanded=False):
     new_title = st.text_input("Título da meta", key="meta_title")
-    new_due = st.date_input("Prazo (opcional)", value=None)
-    if new_due is not None:
+    # optional date: show checkbox to enable date input
+    use_due = st.checkbox("Definir prazo?", key="use_due")
+    if use_due:
+        new_due = st.date_input("Prazo (opcional)", value=date.today(), key="meta_due")
         new_due_str = new_due.isoformat()
     else:
         new_due_str = None
+
     if st.button("Salvar meta"):
         if not new_title or new_title.strip() == "":
             st.error("A meta precisa de título.")
@@ -278,31 +281,33 @@ else:
                 done = cols[1].checkbox("", value=bool(s.get("done")), key=f"chk_{s['id']}")
                 if done != bool(s.get("done")):
                     toggle_submeta_for_user(username, open_meta["id"], s["id"], done)
-                    st.experimental_rerun()
+                    st.rerun()
                 if cols[2].button("🗑", key=f"delsub_{s['id']}"):
                     delete_submeta_for_user(username, open_meta["id"], s["id"])
-                    st.experimental_rerun()
+                    st.rerun()
 
             st.markdown("—")
             # add submeta
             sub_title = st.text_input("Nova sub-meta", key=f"subt_{open_meta['id']}")
             sub_points = st.number_input("Pontos (peso)", min_value=1, value=1, key=f"subp_{open_meta['id']}")
-            sub_due = st.date_input("Prazo (opcional)", value=None, key=f"subd_{open_meta['id']}")
-            sub_due_str = sub_due.isoformat() if sub_due else None
+            use_sub_due = st.checkbox("Definir prazo para sub-meta?", key=f"sub_use_due_{open_meta['id']}")
+            if use_sub_due:
+                sub_due = st.date_input("Prazo (opcional)", value=date.today(), key=f"subd_{open_meta['id']}")
+                sub_due_str = sub_due.isoformat()
+            else:
+                sub_due_str = None
             if st.button("Salvar sub-meta", key=f"savesub_{open_meta['id']}"):
                 if not sub_title or sub_title.strip() == "":
                     st.error("Sub-meta precisa de título")
                 else:
                     add_submeta_for_user(username, open_meta["id"], sub_title.strip(), int(sub_points), sub_due_str)
                     st.success("Sub-meta adicionada")
-                   st.rerun()
+                    st.rerun()
             st.markdown("---")
             # actions: delete meta
             if st.button("Excluir meta"):
                 delete_meta_for_user(username, open_meta["id"])
                 st.success("Meta removida")
-                st.experimental_rerun()
-
-
+                st.rerun()
 
 
