@@ -192,7 +192,7 @@ with st.sidebar:
             if st.button("Entrar"):
                 if verify_user(login_user, login_pwd):
                     st.session_state.user = login_user
-                    st.experimental_rerun()
+                    st.rerun()
                 else:
                     st.sidebar.error("Usuário ou senha inválidos")
     else:
@@ -303,3 +303,4 @@ else:
                 delete_meta_for_user(username, open_meta["id"])
                 st.success("Meta removida")
                 st.experimental_rerun()
+
