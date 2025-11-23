@@ -79,7 +79,7 @@ if menu == "Ver Metas":
         st.write(f"📅 Prazo: {prazo}")
         st.progress(progresso / 100)
 
-        # Colunas para layout
+        # Layout em colunas
         col1, col2, col3 = st.columns(3)
         with col1:
             st.write("**Sub-metas**")
@@ -88,9 +88,9 @@ if menu == "Ver Metas":
         with col3:
             st.write("**Ação**")
 
-        # Exibir sub-metas
         sub_metas = carregar_sub_metas(id_meta)
 
+        # LISTAGEM DE SUB-METAS
         for sub in sub_metas:
             id_sub, meta_id, nome_sub, concluido = sub
 
@@ -108,10 +108,14 @@ if menu == "Ver Metas":
 
             with col3:
                 if st.button("🗑️", key=f"del_{id_sub}"):
-                    cursor.execute("DELETE FROM sub_metas WHERE id = ?", (id_sub,))
+                    cursor.execute(
+                        "DELETE FROM sub_metas WHERE id = ?",
+                        (id_sub,)
+                    )
                     conn.commit()
                     st.rerun()
 
+            # Atualizar status da sub-meta
             if check != bool(concluido):
                 cursor.execute(
                     "UPDATE sub_metas SET concluido = ? WHERE id = ?",
@@ -119,7 +123,7 @@ if menu == "Ver Metas":
                 )
                 conn.commit()
 
-        # Atualizar progresso automaticamente
+        # ATUALIZAÇÃO AUTOMÁTICA DO PROGRESSO
         if sub_metas:
             total = len(sub_metas)
             feitas = sum([1 for s in sub_metas if s[3] == 1])
@@ -135,40 +139,19 @@ if menu == "Ver Metas":
 
         st.write("---")
 
-        # Adi
+        # ADICIONAR NOVA SUB-META
+        nome_sub = st.text_input(
+            f"Adicionar sub-meta para '{nome}'",
+            key=f"add_{id_meta}"
+        )
 
-        elif progresso >= 40:
-            cor = "yellow"
-        else:
-            cor = "red"
-
-        st.write(f"**Progresso:** {progresso}% 🔵🟢🟡🔴".replace("blue","🔵").replace("green","🟢").replace("yellow","🟡").replace("red","🔴"))
-
-        # Mostrar submetas
-        for sub_id, sub_titulo, concluida, pontos, prazo_sub in submetas:
-            colA, colB = st.columns([6,1])
-            with colA:
-                st.write(f"- {sub_titulo} (Pontos: {pontos}) — Prazo: {prazo_sub}")
-            with colB:
-                novo_valor = st.checkbox("Feita", value=bool(concluida), key=f"sub{sub_id}")
-                toggle_submeta(sub_id, 1 if novo_valor else 0)
-
-        st.markdown("### ➕ Adicionar Submeta")
-        with st.form(f"form_submeta_{meta_id}"):
-            sub_titulo = st.text_input("Título da Submeta", key=f"t{sub_id}")
-            pontos = st.number_input("Pontos", min_value=1, max_value=100, value=1, step=1, key=f"p{sub_id}")
-            prazo_sub = st.date_input("Prazo da Submeta", date.today(), key=f"d{sub_id}")
-            enviar = st.form_submit_button("Adicionar")
-
-            if enviar:
-                add_submeta(meta_id, sub_titulo, pontos, str(prazo_sub))
-                st.success("Submeta adicionada!")
-
-        st.error("Excluir Meta")
-        if st.button(f"Excluir Meta {meta_id}"):
-            delete_meta(meta_id)
-            st.warning("Meta removida!")
-
-        st.markdown("---")
+        if st.button(f"Salvar sub-meta {id_meta}"):
+            cursor.execute(
+                "INSERT INTO sub_metas (meta_id, nome) VALUES (?, ?)",
+                (id_meta, nome_sub)
+            )
+            conn.commit()
+            st.success("Sub-meta adicionada!")
+            st.rerun()
 
 
