@@ -239,7 +239,7 @@ with st.expander("➕ Adicionar nova meta", expanded=False):
         else:
             add_meta_for_user(username, new_title.strip(), new_due_str)
             st.success("Meta salva.")
-            st.experimental_rerun()
+            st.rerun()
 
 # show metas
 db = load_db()
@@ -303,4 +303,5 @@ else:
                 delete_meta_for_user(username, open_meta["id"])
                 st.success("Meta removida")
                 st.experimental_rerun()
+
 
