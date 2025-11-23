@@ -1,171 +1,158 @@
 import streamlit as st
-from deta import Deta
-from datetime import datetime
+import json
+import os
+import hashlib
 
-# -----------------------------
-# CONFIGURAÇÃO DA DETA (NUVEM)
-# -----------------------------
-DETA_KEY = "COLOQUE_SUA_CHAVE_AQUI"
 
-deta = Deta(DETA_KEY)
-metas_db = deta.Base("metas_db")
-sub_metas_db = deta.Base("sub_metas_db")
+# ========================
+# FUNÇÕES DO “BANCO DE DADOS”
+# ========================
 
-# -----------------------------
-# SISTEMA DE LOGIN
-# -----------------------------
-st.title("🔐 Login no Sistema de Metas")
+DB_FILE = "database.json"
+
+def load_db():
+    if not os.path.exists(DB_FILE):
+        with open(DB_FILE, "w") as f:
+            json.dump({"users": {}}, f)
+    with open(DB_FILE, "r") as f:
+        return json.load(f)
+
+def save_db(db):
+    with open(DB_FILE, "w") as f:
+        json.dump(db, f, indent=4)
+
+
+# ========================
+# AUTENTICAÇÃO
+# ========================
+
+def hash_password(password):
+    return hashlib.sha256(password.encode()).hexdigest()
+
+def create_user(username, password):
+    db = load_db()
+
+    if username in db["users"]:
+        return False  # usuário já existe
+
+    db["users"][username] = {
+        "password": hash_password(password),
+        "goals": []
+    }
+
+    save_db(db)
+    return True
+
+
+def login_user(username, password):
+    db = load_db()
+
+    if username not in db["users"]:
+        return False
+
+    hashed = hash_password(password)
+    return db["users"][username]["password"] == hashed
+
+
+# ========================
+# APP STREAMLIT
+# ========================
+
+st.title("Sistema de Metas - Web")
+
+menu = ["Login", "Criar Conta"]
+choice = st.sidebar.selectbox("Menu", menu)
 
 if "usuario" not in st.session_state:
     st.session_state.usuario = None
 
-if st.session_state.usuario is None:
-    opcao = st.radio("Acessar:", ["Entrar", "Criar Conta"])
 
-    email = st.text_input("Email:")
-    senha = st.text_input("Senha:", type="password")
+# ========================
+# LOGIN
+# ========================
 
-    if opcao == "Criar Conta":
-        if st.button("Registrar"):
-            metas_db.put({"key": f"user_{email}", "email": email, "senha": senha})
-            st.success("Conta criada!")
-    
-    if opcao == "Entrar":
-        if st.button("Login"):
-            user = metas_db.get(f"user_{email}")
-            if user and user["senha"] == senha:
-                st.session_state.usuario = email
-                st.success("Login efetuado!")
+if choice == "Login":
+    st.subheader("Faça seu login")
+
+    user = st.text_input("Usuário")
+    pwd = st.text_input("Senha", type="password")
+
+    if st.button("Entrar"):
+        if login_user(user, pwd):
+            st.success("Login realizado com sucesso!")
+            st.session_state.usuario = user
+        else:
+            st.error("Usuário ou senha incorretos.")
+
+
+# ========================
+# CRIAR CONTA
+# ========================
+
+elif choice == "Criar Conta":
+    st.subheader("Criar nova conta")
+
+    new_user = st.text_input("Novo usuário")
+    new_pwd = st.text_input("Nova senha", type="password")
+
+    if st.button("Cadastrar"):
+        if create_user(new_user, new_pwd):
+            st.success("Conta criada com sucesso!")
+        else:
+            st.error("Usuário já existe. Escolha outro nome.")
+
+
+# ========================
+# ÁREA LOGADA
+# ========================
+
+if st.session_state.usuario:
+
+    st.header(f"Bem-vindo, {st.session_state.usuario}!")
+
+    db = load_db()
+    user_data = db["users"][st.session_state.usuario]
+
+    st.subheader("Suas Metas")
+
+    # LISTAR METAS
+    if user_data["goals"]:
+        for i, goal in enumerate(user_data["goals"]):
+            st.write(f"### 🎯 {goal['titulo']}")
+            st.write(f"- Descrição: {goal['descricao']}")
+            st.write(f"- Progresso: {goal['progresso']}%")
+            novo_prog = st.slider(f"Atualizar progresso ({goal['titulo']})", 0, 100, goal["progresso"])
+            if st.button(f"Salvar progresso {i}"):
+                user_data["goals"][i]["progresso"] = novo_prog
+                save_db(db)
+                st.success("Progresso salvo!")
                 st.rerun()
-            else:
-                st.error("Email ou senha incorretos.")
-        
-    st.stop()
+    else:
+        st.info("Nenhuma meta cadastrada ainda.")
 
-# -----------------------------
-# SISTEMA PRINCIPAL
-# -----------------------------
-st.title(f"🎯 Sistema de Metas — Usuário: {st.session_state.usuario}")
+    st.divider()
 
-menu = st.sidebar.radio("Menu", ["Adicionar Meta", "Ver Metas", "Sair"])
+    # ADICIONAR META
+    st.subheader("Adicionar nova meta")
 
-if menu == "Sair":
-    st.session_state.usuario = None
-    st.rerun()
+    titulo = st.text_input("Título da meta")
+    descricao = st.text_area("Descrição")
 
-# -----------------------------
-# CARREGAR METAS
-# -----------------------------
-def carregar_metas():
-    return metas_db.fetch({"usuario": st.session_state.usuario}).items
-
-def carregar_sub_metas(meta_id):
-    return sub_metas_db.fetch({"meta_id": meta_id}).items
-
-# -----------------------------
-# ADICIONAR META
-# -----------------------------
-if menu == "Adicionar Meta":
-    st.subheader("Criar nova meta")
-
-    nome = st.text_input("Nome da meta:")
-    prazo = st.date_input("Prazo final:")
-
-    if st.button("Salvar Meta"):
-        metas_db.put({
-            "usuario": st.session_state.usuario,
-            "nome": nome,
-            "prazo": str(prazo),
-            "progresso": 0
-        })
-        st.success("Meta criada!")
-
-# -----------------------------
-# VER METAS
-# -----------------------------
-if menu == "Ver Metas":
-    st.subheader("Progresso das Metas")
-
-    metas = carregar_metas()
-
-    for meta in metas:
-        meta_id = meta["key"]
-        nome = meta["nome"]
-        prazo = meta["prazo"]
-        progresso = meta["progresso"]
-
-        st.write(f"### {nome}")
-        st.write(f"📅 Prazo: {prazo}")
-        st.progress(progresso / 100)
-
-        # Cabeçalhos
-        col1, col2, col3 = st.columns(3)
-        col1.write("**Sub-metas**")
-        col2.write("**Concluído?**")
-        col3.write("**Ação**")
-
-        sub_metas = carregar_sub_metas(meta_id)
-
-        # LISTAGEM DE SUB-METAS
-        for sub in sub_metas:
-            sub_id = sub["key"]
-            nome_sub = sub["nome"]
-            concluido = sub["concluido"]
-
-            col1, col2, col3 = st.columns(3)
-
-            with col1:
-                st.write(nome_sub)
-
-            with col2:
-                check = st.checkbox("", value=bool(concluido), key=f"check_{sub_id}")
-
-            with col3:
-                if st.button("🗑️", key=f"del_{sub_id}"):
-                    sub_metas_db.delete(sub_id)
-                    st.rerun()
-
-            # Atualizar status
-            if check != bool(concluido):
-                sub_metas_db.put(
-                    {
-                        "meta_id": meta_id,
-                        "nome": nome_sub,
-                        "concluido": 1 if check else 0
-                    },
-                    sub_id
-                )
-
-        # CALCULAR PROGRESSO
-        if sub_metas:
-            total = len(sub_metas)
-            feitas = sum([1 for s in sub_metas if s["concluido"] == 1])
-            novo_progresso = int((feitas / total) * 100)
-
-            if novo_progresso != progresso:
-                metas_db.put(
-                    {
-                        "usuario": st.session_state.usuario,
-                        "nome": nome,
-                        "prazo": prazo,
-                        "progresso": novo_progresso,
-                    },
-                    meta_id
-                )
-                st.rerun()
-
-        st.write("---")
-
-        # ADICIONAR SUB-META
-        nome_sub = st.text_input(f"Adicionar sub-meta para '{nome}'", key=f"add_{meta_id}")
-        if st.button(f"Salvar sub-meta {meta_id}"):
-            sub_metas_db.put({
-                "meta_id": meta_id,
-                "nome": nome_sub,
-                "concluido": 0
+    if st.button("Adicionar Meta"):
+        if titulo:
+            user_data["goals"].append({
+                "titulo": titulo,
+                "descricao": descricao,
+                "progresso": 0
             })
-            st.success("Sub-meta adicionada!")
+            save_db(db)
+            st.success("Meta adicionada!")
             st.rerun()
+        else:
+            st.error("A meta precisa ter um título!")
 
+    st.divider()
 
-
+    if st.button("Sair"):
+        st.session_state.usuario = None
+        st.rerun()
