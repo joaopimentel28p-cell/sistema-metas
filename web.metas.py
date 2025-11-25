@@ -1,11 +1,14 @@
+
 import streamlit as st
 import sqlite3
+import pandas as pd
+import plotly.express as px
 from datetime import datetime
 
 # -----------------------------
 # BANCO DE DADOS
 # -----------------------------
-conn = sqlite3.connect("metas.db")
+conn = sqlite3.connect("metas.db", check_same_thread=False)
 cursor = conn.cursor()
 
 cursor.execute("""
@@ -30,7 +33,7 @@ CREATE TABLE IF NOT EXISTS sub_metas (
 conn.commit()
 
 # -----------------------------
-# FUNÇÃO PARA CARREGAR DADOS
+# CARREGADORES
 # -----------------------------
 def carregar_metas():
     cursor.execute("SELECT * FROM metas")
@@ -43,15 +46,15 @@ def carregar_sub_metas(meta_id):
 # -----------------------------
 # INTERFACE
 # -----------------------------
-st.title("🎯 Sistema de Metas do João")
+st.title("🎯 Sistema de Metas — João")
 
-menu = st.sidebar.radio("Menu", ["Adicionar Meta", "Ver Metas"])
+menu = st.sidebar.radio("Menu", ["Adicionar Meta", "Ver e Editar Metas", "Gráficos"])
 
 # -----------------------------
 # ADICIONAR META
 # -----------------------------
 if menu == "Adicionar Meta":
-    st.subheader("Criar nova meta")
+    st.header("➕ Criar nova meta")
 
     nome = st.text_input("Nome da meta:")
     prazo = st.date_input("Prazo final:")
@@ -62,47 +65,80 @@ if menu == "Adicionar Meta":
         st.success("Meta criada!")
 
 # -----------------------------
-# VER METAS
+# VER E EDITAR METAS
 # -----------------------------
-if menu == "Ver Metas":
-    st.subheader("Progresso das Metas")
+if menu == "Ver e Editar Metas":
+    st.header("📋 Gerenciamento de metas")
 
     metas = carregar_metas()
 
     for meta in metas:
-        id_meta, nome, prazo, progresso = meta
+        meta_id, nome, prazo, progresso = meta
 
-        st.write(f"### {nome}")
-        st.write(f"📅 Prazo: {prazo}")
+        st.subheader(f"🎯 {nome}")
+        st.write(f"📅 Prazo: **{prazo}**")
+
         st.progress(progresso / 100)
 
-        # Exibir sub-metas
-        sub_metas = carregar_sub_metas(id_meta)
-
+        # Submetas
         st.write("**Sub-metas:**")
-        for sub in sub_metas:
-            id_sub, meta_id, nome_sub, concluido = sub
-            check = st.checkbox(nome_sub, value=bool(concluido), key=f"{id_sub}")
+        sub_metas = carregar_sub_metas(meta_id)
 
-            # Atualizar sub-meta
+        for sub in sub_metas:
+            sub_id, m_id, sub_nome, concluido = sub
+            check = st.checkbox(sub_nome, value=bool(concluido), key=f"sub_{sub_id}")
+
             if check != bool(concluido):
-                cursor.execute("UPDATE sub_metas SET concluido = ? WHERE id = ?", (1 if check else 0, id_sub))
+                cursor.execute(
+                    "UPDATE sub_metas SET concluido = ? WHERE id = ?",
+                    (1 if check else 0, sub_id)
+                )
                 conn.commit()
 
-        # Cálculo automático do progresso
+        # Atualiza progresso automaticamente
         if sub_metas:
             total = len(sub_metas)
             feitas = sum([1 for s in sub_metas if s[3] == 1])
             novo_progresso = int((feitas / total) * 100)
 
             if novo_progresso != progresso:
-                cursor.execute("UPDATE metas SET progresso = ? WHERE id = ?", (novo_progresso, id_meta))
+                cursor.execute("UPDATE metas SET progresso = ? WHERE id = ?", (novo_progresso, meta_id))
                 conn.commit()
 
         st.write("---")
 
-        nome_sub = st.text_input(f"Adicionar sub-meta para '{nome}'", key=f"add_{id_meta}")
-        if st.button(f"Salvar sub-meta {id_meta}"):
-            cursor.execute("INSERT INTO sub_metas (meta_id, nome) VALUES (?, ?)", (id_meta, nome_sub))
+        # Adicionar nova sub-meta
+        nova_sub = st.text_input(f"Adicionar sub-meta para '{nome}'", key=f"add_{meta_id}")
+        if st.button(f"Salvar sub-meta {meta_id}"):
+            cursor.execute("INSERT INTO sub_metas (meta_id, nome) VALUES (?, ?)", (meta_id, nova_sub))
             conn.commit()
             st.success("Sub-meta adicionada!")
+
+# -----------------------------
+# GRÁFICOS
+# -----------------------------
+if menu == "Gráficos":
+    st.header("📊 Visualização das Metas")
+
+    metas = carregar_metas()
+    df = pd.DataFrame(metas, columns=["id", "nome", "prazo", "progresso"])
+
+    if df.empty:
+        st.warning("Nenhuma meta adicionada ainda.")
+    else:
+        tipo = st.selectbox(
+            "Escolha o tipo de gráfico:",
+            ["Barra", "Pizza", "Linha"]
+        )
+
+        if tipo == "Barra":
+            fig = px.bar(df, x="nome", y="progresso", title="Progresso das Metas (%)")
+            st.plotly_chart(fig)
+
+        elif tipo == "Pizza":
+            fig = px.pie(df, names="nome", values="progresso", title="Distribuição de Progresso")
+            st.plotly_chart(fig)
+
+        elif tipo == "Linha":
+            fig = px.line(df, x="nome", y="progresso", title="Evolução do Progresso")
+            st.plotly_chart(fig
